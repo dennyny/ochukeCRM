@@ -3,6 +3,7 @@ import AuthForm from './components/Auth/AuthForm'
 import Sidebar from './components/Layout/Sidebar'
 import Dashboard from './components/Dashboard/Dashboard'
 import Customers from './components/Customers/Customers'
+import Orders from './components/Orders/Orders'
 import { useState } from 'react'
 
 function App() {
@@ -28,7 +29,7 @@ function App() {
       case 'customers':
         return <Customers />
       case 'orders':
-        return <div className="p-6">Orders - Coming Soon</div>
+        return <Orders />
       case 'invoices':
         return <div className="p-6">Invoices - Coming Soon</div>
       case 'finances':
