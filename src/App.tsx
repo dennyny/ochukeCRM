@@ -4,6 +4,7 @@ import Sidebar from './components/Layout/Sidebar'
 import Dashboard from './components/Dashboard/Dashboard'
 import Customers from './components/Customers/Customers'
 import Orders from './components/Orders/Orders'
+import Invoices from './components/Invoices/Invoices'
 import { useState } from 'react'
 
 function App() {
@@ -31,7 +32,7 @@ function App() {
       case 'orders':
         return <Orders />
       case 'invoices':
-        return <div className="p-6">Invoices - Coming Soon</div>
+        return <Invoices />
       case 'finances':
         return <div className="p-6">Finances - Coming Soon</div>
       case 'reports':

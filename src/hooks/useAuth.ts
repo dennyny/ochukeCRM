@@ -51,7 +51,11 @@ export function useAuth() {
         .single()
 
       if (error) {
-        console.error('Error fetching profile:', error)
+        if (error.code === 'PGRST116') {
+          setProfile(null);
+        } else {
+          console.error('Error fetching profile:', error)
+        }
       } else {
         setProfile(data)
       }
