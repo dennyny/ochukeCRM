@@ -4,7 +4,6 @@ import {
   TrendingDown, 
   Users, 
   ShoppingCart, 
-  DollarSign, 
   FileText,
   Calendar,
   MoreVertical
@@ -125,9 +124,11 @@ export default function Dashboard() {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-NG', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'NGN',
+      currencyDisplay: 'symbol',
+      minimumFractionDigits: 2
     }).format(amount)
   }
 
@@ -158,7 +159,7 @@ export default function Dashboard() {
     {
       title: 'Total Revenue',
       value: stats.totalRevenue,
-      icon: DollarSign,
+  icon: () => <span className="text-2xl font-bold">₦</span>,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       growth: stats.revenueGrowth,
