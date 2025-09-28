@@ -36,8 +36,10 @@ export default function OrderForm({ order, onClose, onSuccess }: OrderFormProps)
   })
 
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    if (user) {
+      fetchCustomers();
+    }
+  }, [user]);
 
   const fetchCustomers = async () => {
     try {
