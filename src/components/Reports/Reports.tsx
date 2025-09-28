@@ -22,7 +22,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   // Filter state: startDate, endDate, extensible for more
   const [filters, setFilters] = useState<ReportFilterState>({
-    startDate: new Date('2000-01-01T00:00:00Z'),
+    startDate: new Date('2025-01-01T00:00:00Z'),
     endDate: new Date(),
   });
 

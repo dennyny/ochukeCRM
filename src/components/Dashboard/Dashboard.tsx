@@ -17,8 +17,10 @@ interface DashboardStats {
   totalCustomers: number
   totalOrders: number
   totalInvoices: number
-  revenueGrowth: number
-  expenseGrowth: number
+  prevRevenue?: number
+  prevExpenses?: number
+  prevCustomers?: number
+  prevOrders?: number
 }
 
 interface RecentActivity {
@@ -38,8 +40,10 @@ export default function Dashboard() {
     totalCustomers: 0,
     totalOrders: 0,
     totalInvoices: 0,
-    revenueGrowth: 0,
-    expenseGrowth: 0
+    prevRevenue: undefined,
+    prevExpenses: undefined,
+    prevCustomers: undefined,
+    prevOrders: undefined,
   })
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,40 +56,35 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch customers count
-      const { count: customersCount } = await supabase
-        .from('customers')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user!.id)
+      // Date ranges for this month and last month
+      const now = new Date();
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-      // Fetch orders count and total
-      const { data: orders, count: ordersCount } = await supabase
-        .from('orders')
-        .select('total_amount', { count: 'exact' })
-        .eq('user_id', user!.id)
+      // Fetch current month
+      const [{ count: customersCount }, { data: orders, count: ordersCount }, { count: invoicesCount }, { data: transactions }] = await Promise.all([
+        supabase.from('customers').select('*', { count: 'exact', head: true }).eq('user_id', user!.id).gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString()),
+        supabase.from('orders').select('total_amount', { count: 'exact' }).eq('user_id', user!.id).gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString()),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('user_id', user!.id).gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString()),
+        supabase.from('financial_transactions').select('type, amount, created_at').eq('user_id', user!.id).gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString()),
+      ]);
 
-      // Fetch invoices count
-      const { count: invoicesCount } = await supabase
-        .from('invoices')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user!.id)
-
-      // Fetch financial data
-      const { data: transactions } = await supabase
-        .from('financial_transactions')
-        .select('type, amount, created_at')
-        .eq('user_id', user!.id)
+      // Fetch previous month
+      const [{ count: prevCustomers }, { count: prevOrders }, { data: prevTransactions }] = await Promise.all([
+        supabase.from('customers').select('*', { count: 'exact', head: true }).eq('user_id', user!.id).gte('created_at', startOfLastMonth.toISOString()).lte('created_at', endOfLastMonth.toISOString()),
+        supabase.from('orders').select('id', { count: 'exact' }).eq('user_id', user!.id).gte('created_at', startOfLastMonth.toISOString()).lte('created_at', endOfLastMonth.toISOString()),
+        supabase.from('financial_transactions').select('type, amount, created_at').eq('user_id', user!.id).gte('created_at', startOfLastMonth.toISOString()).lte('created_at', endOfLastMonth.toISOString()),
+      ]);
 
       // Calculate stats
-      const totalRevenue = transactions
-        ?.filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + t.amount, 0) || 0
+      const totalRevenue = transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
+      const totalExpenses = transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
+      const prevRevenue = prevTransactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || undefined;
+      const prevExpenses = prevTransactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || undefined;
 
-      const totalExpenses = transactions
-        ?.filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0) || 0
-
-      // Get recent activity
+      // Get recent activity (still from all time)
       const { data: recentOrders } = await supabase
         .from('orders')
         .select(`
@@ -94,7 +93,7 @@ export default function Dashboard() {
         `)
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
-        .limit(5)
+        .limit(5);
 
       const activity: RecentActivity[] = recentOrders?.map(order => ({
         id: order.id,
@@ -103,7 +102,7 @@ export default function Dashboard() {
         description: `Order #${order.id.slice(-8)} - ${order.status}`,
         amount: order.total_amount,
         date: order.created_at
-      })) || []
+      })) || [];
 
       setStats({
         totalRevenue,
@@ -111,17 +110,19 @@ export default function Dashboard() {
         totalCustomers: customersCount || 0,
         totalOrders: ordersCount || 0,
         totalInvoices: invoicesCount || 0,
-        revenueGrowth: 12.5, // Mock data
-        expenseGrowth: -5.2  // Mock data
-      })
+        prevRevenue,
+        prevExpenses,
+        prevCustomers: prevCustomers || undefined,
+        prevOrders: prevOrders || undefined,
+      });
 
-      setRecentActivity(activity)
+      setRecentActivity(activity);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error)
+      console.error('Error fetching dashboard data:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
@@ -159,11 +160,10 @@ export default function Dashboard() {
     {
       title: 'Total Revenue',
       value: stats.totalRevenue,
-  icon: () => <span className="text-2xl font-bold">₦</span>,
+      icon: () => <span className="text-2xl font-bold">₦</span>,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
-      growth: stats.revenueGrowth,
-      isPositive: stats.revenueGrowth > 0
+      prev: stats.prevRevenue,
     },
     {
       title: 'Total Expenses',
@@ -171,8 +171,7 @@ export default function Dashboard() {
       icon: TrendingDown,
       color: 'text-red-600',
       bgColor: 'bg-red-50',
-      growth: stats.expenseGrowth,
-      isPositive: stats.expenseGrowth < 0
+      prev: stats.prevExpenses,
     },
     {
       title: 'Total Customers',
@@ -180,8 +179,7 @@ export default function Dashboard() {
       icon: Users,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      growth: 8.3,
-      isPositive: true
+      prev: stats.prevCustomers,
     },
     {
       title: 'Total Orders',
@@ -189,10 +187,9 @@ export default function Dashboard() {
       icon: ShoppingCart,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      growth: 15.2,
-      isPositive: true
+      prev: stats.prevOrders,
     }
-  ]
+  ];
 
   return (
     <div className="p-6 space-y-6">
@@ -213,7 +210,12 @@ export default function Dashboard() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat, index) => {
-          const Icon = stat.icon
+          const Icon = stat.icon;
+          // Calculate growth only if previous data exists and is not zero
+          let growth: number | null = null;
+          if (typeof stat.prev === 'number' && stat.prev !== 0) {
+            growth = ((stat.value - stat.prev) / stat.prev) * 100;
+          }
           return (
             <div key={index} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-4">
@@ -224,29 +226,30 @@ export default function Dashboard() {
                   <MoreVertical size={16} className="text-gray-400" />
                 </button>
               </div>
-              
               <div className="space-y-1">
                 <p className="text-2xl font-bold text-gray-900">
-                  {typeof stat.value === 'number' && stat.title.includes('Revenue') || stat.title.includes('Expenses') 
+                  {typeof stat.value === 'number' && (stat.title.includes('Revenue') || stat.title.includes('Expenses'))
                     ? formatCurrency(stat.value)
                     : stat.value.toLocaleString()
                   }
                 </p>
                 <p className="text-sm text-gray-600">{stat.title}</p>
-                <div className="flex items-center gap-1">
-                  {stat.isPositive ? (
-                    <TrendingUp size={14} className="text-green-500" />
-                  ) : (
-                    <TrendingDown size={14} className="text-red-500" />
-                  )}
-                  <span className={`text-sm font-medium ${stat.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                    {Math.abs(stat.growth)}%
-                  </span>
-                  <span className="text-sm text-gray-500">vs last month</span>
-                </div>
+                {growth !== null ? (
+                  <div className="flex items-center gap-1">
+                    {growth > 0 ? (
+                      <TrendingUp size={14} className="text-green-500" />
+                    ) : (
+                      <TrendingDown size={14} className="text-red-500" />
+                    )}
+                    <span className={`text-sm font-medium ${growth > 0 ? 'text-green-600' : 'text-red-600'}`}>{Math.abs(growth).toFixed(1)}%</span>
+                    <span className="text-sm text-gray-500">vs last month</span>
+                  </div>
+                ) : (
+                  <div className="h-5"></div>
+                )}
               </div>
             </div>
-          )
+          );
         })}
       </div>
 

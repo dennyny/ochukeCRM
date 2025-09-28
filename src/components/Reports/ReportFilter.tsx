@@ -9,7 +9,7 @@ interface ReportFilterProps {
 
 export default function ReportFilter({ onChange, initialFilters }: ReportFilterProps) {
   const [range, setRange] = useState({
-    startDate: initialFilters?.startDate || new Date('2000-01-01T00:00:00Z'),
+    startDate: initialFilters?.startDate || new Date('2025-01-01T00:00:00Z'),
     endDate: initialFilters?.endDate || new Date(),
   });
 
