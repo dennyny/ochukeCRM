@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import InvoiceForm from './InvoiceForm'
 
+
 interface Invoice {
   id: string
   order_id: string
@@ -13,6 +14,11 @@ interface Invoice {
   due_date: string
   created_at: string
   user_id: string
+  orders?: {
+    customers?: {
+      name?: string
+    }
+  }
 }
 
 export default function Invoices() {
@@ -36,7 +42,7 @@ export default function Invoices() {
     try {
       const { data, error } = await supabase
         .from('invoices')
-        .select('*')
+        .select('*, orders(id, customers(name))')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
@@ -133,6 +139,7 @@ export default function Invoices() {
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Invoice #</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Order ID</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Customer Name</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Amount</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Due Date</th>
@@ -147,6 +154,9 @@ export default function Invoices() {
                     </td>
                     <td className="py-4 px-4">
                       <p className="font-medium text-gray-900">{invoice.order_id}</p>
+                    </td>
+                    <td className="py-4 px-4">
+                      <p className="font-medium text-gray-900">{invoice.orders?.customers?.name || '-'}</p>
                     </td>
                     <td className="py-4 px-4">
                       <p className="font-medium text-gray-900">{invoice.amount}</p>
