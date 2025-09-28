@@ -62,9 +62,15 @@ export default function CustomerForm({ customer, onClose, onSuccess }: CustomerF
       }
 
       onSuccess()
-    } catch (error) {
-      console.error('Error saving customer:', error)
-      alert('Error saving customer. Please try again.')
+    } catch (error: any) {
+      let message = 'Error saving customer. Please try again.';
+      if (error && error.message) {
+        message = error.message;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
+      console.error('Error saving customer:', error);
+      alert(message);
     } finally {
       setLoading(false)
     }

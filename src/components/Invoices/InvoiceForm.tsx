@@ -1,23 +1,28 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 
+
 interface Invoice {
-  id: string
-  order_id: string
-  invoice_number: string
-  amount: number
-  status: 'draft' | 'sent' | 'paid' | 'overdue'
-  due_date: string
+  id: string;
+  order_id: string;
+  invoice_number: string;
+  amount: number;
+  status: 'draft' | 'sent' | 'paid' | 'overdue';
+  due_date: string;
 }
 
 interface Order {
   id: string;
   custom_order_id?: string;
   total_amount?: number;
-  customer_id?: string;
-  customers?: { name: string; custom_customer_id?: string };
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  custom_customer_id?: string;
 }
 
 interface InvoiceFormProps {
@@ -29,10 +34,12 @@ interface InvoiceFormProps {
 export default function InvoiceForm({ invoice, onClose, onSuccess }: InvoiceFormProps) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [orderSearch, setOrderSearch] = useState('');
-  const [customerSuggestions, setCustomerSuggestions] = useState<{name: string, custom_customer_id?: string}[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<{name: string, custom_customer_id?: string} | null>(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     order_id: invoice?.order_id || '',
     invoice_number: invoice?.invoice_number || '',
@@ -40,73 +47,57 @@ export default function InvoiceForm({ invoice, onClose, onSuccess }: InvoiceForm
     status: invoice?.status || 'draft',
     due_date: invoice?.due_date || new Date().toISOString().split('T')[0],
   })
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
-      fetchOrders();
+      fetchCustomers();
     }
   }, [user]);
 
-  // Update customer suggestions as user types
-  useEffect(() => {
-    if (orderSearch.trim() === '') {
-      setCustomerSuggestions([]);
-      setSelectedCustomer(null);
-      return;
+  // Fetch all customers for the user
+  const fetchCustomers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id, name, custom_customer_id')
+        .eq('user_id', user!.id);
+      if (error) throw error;
+      setCustomers(data || []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
     }
-    // Get unique customer names from orders
-    const uniqueCustomers: {[key: string]: {name: string, custom_customer_id?: string}} = {};
-    orders.forEach(order => {
-      if (order.customers?.name) {
-        const key = order.customers.name + (order.customers.custom_customer_id || '');
-        if (!uniqueCustomers[key] && order.customers.name.toLowerCase().includes(orderSearch.toLowerCase())) {
-          uniqueCustomers[key] = {
-            name: order.customers.name,
-            custom_customer_id: order.customers.custom_customer_id
-          };
-        }
-      }
-    });
-    setCustomerSuggestions(Object.values(uniqueCustomers));
-  }, [orderSearch, orders]);
+  };
 
-  // Auto-select order if search narrows to one order or customer is selected
+  // Fetch orders for selected customer
   useEffect(() => {
-    if (!invoice) {
-      let filtered = orders;
-      if (selectedCustomer) {
-        filtered = orders.filter(order => order.customers?.name === selectedCustomer.name && order.customers?.custom_customer_id === selectedCustomer.custom_customer_id);
-      } else if (orderSearch.trim() !== '') {
-        filtered = orders.filter(order => {
-          const name = order.customers?.name?.toLowerCase() || '';
-          return name.includes(orderSearch.toLowerCase());
-        });
-      }
-      if (filtered.length === 1 && formData.order_id !== filtered[0].id) {
-        setFormData(prev => ({
-          ...prev,
-          order_id: filtered[0].id,
-          amount: filtered[0].total_amount || 0
-        }));
-      }
+    if (selectedCustomer && user) {
+      fetchOrdersForCustomer(selectedCustomer.id);
+    } else {
+      setOrders([]);
     }
-  }, [orderSearch, orders, selectedCustomer]);
+  }, [selectedCustomer, user]);
 
-  const fetchOrders = async () => {
+  // Auto-select first order when orders are loaded for a selected customer
+  useEffect(() => {
+    if (selectedCustomer && orders.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        order_id: orders[0].id,
+        amount: orders[0].total_amount || 0
+      }));
+    }
+  }, [orders, selectedCustomer]);
+
+  const fetchOrdersForCustomer = async (customerId: string) => {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('id, custom_order_id, total_amount, customer_id, customers(name, custom_customer_id)')
-        .eq('user_id', user!.id);
-
+        .select('id, custom_order_id, total_amount')
+        .eq('user_id', user!.id)
+        .eq('customer_id', customerId);
       if (error) throw error;
-      // Fix: customers is returned as array, but we want a single object
-      setOrders(
-        (data || []).map(order => ({
-          ...order,
-          customers: Array.isArray(order.customers) ? order.customers[0] : order.customers
-        }))
-      );
+      setOrders(data || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
     }
@@ -114,6 +105,11 @@ export default function InvoiceForm({ invoice, onClose, onSuccess }: InvoiceForm
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setFormError(null);
+    if (!formData.order_id) {
+      setFormError('Please select an order for this invoice.');
+      return;
+    }
     setLoading(true)
 
     try {
@@ -162,9 +158,15 @@ export default function InvoiceForm({ invoice, onClose, onSuccess }: InvoiceForm
       }
 
       onSuccess()
-    } catch (error) {
-      console.error('Error saving invoice:', error)
-      alert('Error saving invoice. Please try again.')
+    } catch (error: any) {
+      let message = 'Error saving invoice. Please try again.';
+      if (error && error.message) {
+        message = error.message;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
+      console.error('Error saving invoice:', error);
+      setFormError(message);
     } finally {
       setLoading(false)
     }
@@ -197,6 +199,21 @@ export default function InvoiceForm({ invoice, onClose, onSuccess }: InvoiceForm
     }
   };
 
+  // Handle customer search and selection
+  const handleCustomerSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomerSearch(e.target.value);
+    setShowSuggestions(true);
+    setSelectedCustomer(null);
+    setFormData(prev => ({ ...prev, order_id: '', amount: 0 }));
+  };
+
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setCustomerSearch(`${customer.name} (${customer.custom_customer_id || customer.id.slice(0, 6)})`);
+    setShowSuggestions(false);
+    setFormData(prev => ({ ...prev, order_id: '', amount: 0 }));
+  };
+
   // Auto-generate invoice number for new invoice
   useEffect(() => {
     if (!invoice) {
@@ -224,39 +241,60 @@ export default function InvoiceForm({ invoice, onClose, onSuccess }: InvoiceForm
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label htmlFor="order_id" className="block text-sm font-medium text-gray-700 mb-1">
-              Order (search by customer name) *
+          {formError && (
+            <div className="text-red-600 text-sm mb-2">{formError}</div>
+          )}
+          {/* Customer Search/Select */}
+          <div className="relative">
+            <label htmlFor="customer_search" className="block text-sm font-medium text-gray-700 mb-1">
+              Customer *
             </label>
             <input
+              id="customer_search"
               type="text"
-              placeholder="Search customer name..."
-              value={orderSearch}
-              onChange={e => {
-                setOrderSearch(e.target.value);
-                setSelectedCustomer(null);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
+              ref={searchRef}
+              value={customerSearch}
+              onChange={handleCustomerSearch}
+              onFocus={() => setShowSuggestions(true)}
               autoComplete="off"
+              placeholder="Type to search customer..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
             />
-            {/* Customer suggestions dropdown */}
-            {customerSuggestions.length > 0 && (
-              <ul className="border border-gray-300 rounded-lg bg-white max-h-40 overflow-y-auto mb-2 z-10 relative">
-                {customerSuggestions.map((customer, idx) => (
+            {showSuggestions && customerSearch && (
+              <ul className="absolute z-10 bg-white border border-gray-200 rounded-lg w-full mt-1 max-h-40 overflow-y-auto shadow-lg">
+                {customers.filter(c => {
+                  const search = customerSearch.toLowerCase();
+                  return c.name.toLowerCase().includes(search) ||
+                    (c.custom_customer_id || '').toLowerCase().includes(search) ||
+                    c.name.split(' ').some(part => part.toLowerCase().includes(search));
+                }).map(c => (
                   <li
-                    key={customer.name + (customer.custom_customer_id || '')}
-                    className="px-3 py-2 cursor-pointer hover:bg-blue-100"
-                    onClick={() => {
-                      setSelectedCustomer(customer);
-                      setOrderSearch(customer.name);
-                    }}
+                    key={c.id}
+                    className="px-4 py-2 cursor-pointer hover:bg-blue-50"
+                    onClick={() => handleSelectCustomer(c)}
                   >
-                    {customer.name}
-                    {customer.custom_customer_id ? ` (${customer.custom_customer_id})` : ''}
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-xs text-gray-500 ml-2">{c.custom_customer_id || c.id.slice(0, 6)}</span>
                   </li>
                 ))}
+                {customers.filter(c => {
+                  const search = customerSearch.toLowerCase();
+                  return c.name.toLowerCase().includes(search) ||
+                    (c.custom_customer_id || '').toLowerCase().includes(search) ||
+                    c.name.split(' ').some(part => part.toLowerCase().includes(search));
+                }).length === 0 && (
+                  <li className="px-4 py-2 text-gray-400">No customers found</li>
+                )}
               </ul>
             )}
+          </div>
+
+          {/* Order Dropdown (filtered by customer) */}
+          <div>
+            <label htmlFor="order_id" className="block text-sm font-medium text-gray-700 mb-1">
+              Order *
+            </label>
             <select
               id="order_id"
               name="order_id"
@@ -264,24 +302,12 @@ export default function InvoiceForm({ invoice, onClose, onSuccess }: InvoiceForm
               onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              disabled={!selectedCustomer}
             >
-              <option value="" disabled>Select an order</option>
-              {orders
-                .filter(order => {
-                  if (selectedCustomer) {
-                    return order.customers?.name === selectedCustomer.name && order.customers?.custom_customer_id === selectedCustomer.custom_customer_id;
-                  }
-                  const name = order.customers?.name?.toLowerCase() || '';
-                  return orderSearch.trim() === '' || name.includes(orderSearch.toLowerCase());
-                })
-                .map(order => (
-                  <option key={order.id} value={order.id}>
-                    {order.customers?.name || 'Unknown'}
-                    {order.customers?.custom_customer_id ? ` (${order.customers.custom_customer_id})` : ''}
-                    {' - '}
-                    {order.custom_order_id || order.id}
-                  </option>
-                ))}
+              <option value="" disabled>{selectedCustomer ? 'Select an order' : 'Select a customer first'}</option>
+              {orders.map(order => (
+                <option key={order.id} value={order.id}>{order.custom_order_id || order.id}</option>
+              ))}
             </select>
           </div>
 
