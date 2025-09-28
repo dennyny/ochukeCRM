@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import KpiCard from './KpiCard';
 import ReportFilter, { ReportFilterState } from './ReportFilter';
 import { downloadCsv } from '../../lib/csv';
+import { downloadExcel } from '../../lib/excel';
 import { Users, ShoppingCart, FileText, DollarSign } from 'lucide-react';
 import { Pie, Bar } from 'react-chartjs-2';
 import 'chart.js/auto';
@@ -182,7 +183,7 @@ export default function Reports() {
         <ReportFilter onChange={handleFilterChange} initialFilters={filters} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-4">
           <h2 className="text-lg font-semibold mb-4">Expense Breakdown</h2>
           <Pie data={pieData} />
@@ -190,6 +191,41 @@ export default function Reports() {
         <div className="bg-white rounded-lg shadow p-4">
           <h2 className="text-lg font-semibold mb-4">Most Sold Order Items</h2>
           <Bar data={barData} />
+        </div>
+      </div>
+
+      {/* Excel Download Section */}
+      <div className="mt-10 flex flex-col items-center">
+        <div className="mb-2 font-semibold">Download as Excel</div>
+        <div className="flex gap-4">
+          <button
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            onClick={() => data && downloadExcel(data.customers, 'customers.xlsx')}
+            disabled={!data || !data.customers.length}
+          >
+            Customers
+          </button>
+          <button
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            onClick={() => data && downloadExcel(data.orders, 'orders.xlsx')}
+            disabled={!data || !data.orders.length}
+          >
+            Orders
+          </button>
+          <button
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            onClick={() => data && downloadExcel(data.invoices, 'invoices.xlsx')}
+            disabled={!data || !data.invoices.length}
+          >
+            Invoices
+          </button>
+          <button
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            onClick={() => data && downloadExcel(data.transactions, 'finance.xlsx')}
+            disabled={!data || !data.transactions.length}
+          >
+            Finance
+          </button>
         </div>
       </div>
     </div>
