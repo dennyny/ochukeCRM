@@ -138,6 +138,7 @@ export default function FinanceForm({ transaction, onClose, onSuccess }: Finance
               Category *
             </label>
             <input
+              list="expense-categories"
               type="text"
               id="category"
               name="category"
@@ -145,7 +146,21 @@ export default function FinanceForm({ transaction, onClose, onSuccess }: Finance
               onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              autoComplete="off"
             />
+            <datalist id="expense-categories">
+              <option value="Rent" />
+              <option value="Salaries" />
+              <option value="Utilities" />
+              <option value="Electricity" />
+              <option value="Internet" />
+              <option value="Office Supplies" />
+              <option value="Marketing" />
+              <option value="Transport" />
+              <option value="Repairs & Maintenance" />
+              <option value="Insurance" />
+              <option value="Other" />
+            </datalist>
           </div>
 
           <div>
