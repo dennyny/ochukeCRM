@@ -74,7 +74,6 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at timestamptz DEFAULT now()
 );
 
--- Create customers table
 CREATE TABLE IF NOT EXISTS customers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -86,6 +85,9 @@ CREATE TABLE IF NOT EXISTS customers (
   created_at timestamptz DEFAULT now(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
 );
+
+-- Add custom_customer_id column for storing simple customer code
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS custom_customer_id text UNIQUE;
 
 CREATE TABLE IF NOT EXISTS orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

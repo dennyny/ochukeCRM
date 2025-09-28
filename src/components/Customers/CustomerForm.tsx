@@ -45,11 +45,16 @@ export default function CustomerForm({ customer, onClose, onSuccess }: CustomerF
 
         if (error) throw error
       } else {
+  // Generate a short customer ID: CUST-XXX123 (3 random uppercase letters + 3 random digits)
+  const letters = Array.from({length: 3}, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('');
+  const digits = Math.floor(100 + Math.random() * 900);
+  const customCustomerId = `CUST-${letters}${digits}`;
         // Create new customer
         const { error } = await supabase
           .from('customers')
           .insert({
             ...formData,
+            custom_customer_id: customCustomerId,
             user_id: user!.id
           })
 

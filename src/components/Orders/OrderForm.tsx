@@ -34,6 +34,9 @@ export default function OrderForm({ order, onClose, onSuccess }: OrderFormProps)
     order_date: order?.order_date || new Date().toISOString().split('T')[0],
     notes: order?.notes || ''
   })
+  // Order item state
+  const [orderItem, setOrderItem] = useState('');
+  const [customOrderItem, setCustomOrderItem] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -81,15 +84,31 @@ export default function OrderForm({ order, onClose, onSuccess }: OrderFormProps)
       } else {
         // Create new order
         const customOrderId = generateOrderId();
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('orders')
           .insert({
             ...formData,
             custom_order_id: customOrderId,
             user_id: user!.id
           })
+          .select('id');
 
-        if (error) throw error
+        if (error) throw error;
+        const newOrderId = data && data[0]?.id;
+        // Insert order item if provided
+        const itemName = orderItem === 'custom' ? customOrderItem : orderItem;
+        if (newOrderId && itemName) {
+          const { error: itemError } = await supabase
+            .from('order_items')
+            .insert({
+              order_id: newOrderId,
+              item_name: itemName,
+              quantity: 1,
+              unit_price: formData.total_amount,
+              total_price: formData.total_amount
+            });
+          if (itemError) throw itemError;
+        }
       }
 
       onSuccess()
@@ -108,6 +127,11 @@ export default function OrderForm({ order, onClose, onSuccess }: OrderFormProps)
     }))
   }
 
+  const handleOrderItemChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setOrderItem(e.target.value);
+    if (e.target.value !== 'custom') setCustomOrderItem('');
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
@@ -124,6 +148,37 @@ export default function OrderForm({ order, onClose, onSuccess }: OrderFormProps)
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Order Item Selection */}
+          <div>
+            <label htmlFor="order_item" className="block text-sm font-medium text-gray-700 mb-1">
+              Order Item *
+            </label>
+            <select
+              id="order_item"
+              name="order_item"
+              value={orderItem}
+              onChange={handleOrderItemChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
+              required
+            >
+              <option value="" disabled>Select an item</option>
+              <option value="Shirt">Shirt</option>
+              <option value="Suits">Suits</option>
+              <option value="Dress">Dress</option>
+              <option value="Shoes">Shoes</option>
+              <option value="custom">Other (type below)</option>
+            </select>
+            {orderItem === 'custom' && (
+              <input
+                type="text"
+                placeholder="Type item name"
+                value={customOrderItem}
+                onChange={e => setCustomOrderItem(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
+            )}
+          </div>
           <div>
             <label htmlFor="customer_id" className="block text-sm font-medium text-gray-700 mb-1">
               Customer *
