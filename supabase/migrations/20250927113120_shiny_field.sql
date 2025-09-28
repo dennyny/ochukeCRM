@@ -87,7 +87,6 @@ CREATE TABLE IF NOT EXISTS customers (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
 );
 
--- Create orders table
 CREATE TABLE IF NOT EXISTS orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -98,6 +97,9 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at timestamptz DEFAULT now(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
 );
+
+-- Add custom_order_id column for storing custom order code
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS custom_order_id text UNIQUE;
 
 -- Create order_items table
 CREATE TABLE IF NOT EXISTS order_items (

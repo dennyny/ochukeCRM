@@ -55,6 +55,16 @@ export default function OrderForm({ order, onClose, onSuccess }: OrderFormProps)
     }
   };
 
+  // Helper to generate order ID: Day_time_dayofweek_and 3 random numbers
+  const generateOrderId = () => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const time = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    const dayOfWeek = now.toLocaleString('en-US', { weekday: 'short' });
+    const random = Math.floor(100 + Math.random() * 900); // 3 random numbers
+    return `${day}_${time}_${dayOfWeek}_${random}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -70,10 +80,12 @@ export default function OrderForm({ order, onClose, onSuccess }: OrderFormProps)
         if (error) throw error
       } else {
         // Create new order
+        const customOrderId = generateOrderId();
         const { error } = await supabase
           .from('orders')
           .insert({
             ...formData,
+            custom_order_id: customOrderId,
             user_id: user!.id
           })
 

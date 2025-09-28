@@ -6,7 +6,9 @@ import OrderForm from './OrderForm'
 
 interface Order {
   id: string
+  custom_order_id?: string
   customer_id: string
+  customer_name?: string
   total_amount: number
   status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled'
   order_date: string
@@ -36,12 +38,17 @@ export default function Orders() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('id, custom_order_id, customer_id, total_amount, status, order_date, notes, created_at, user_id, customers(name)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setOrders(data || [])
+      // Map customer name from join
+      const ordersWithCustomer = (data || []).map((order: any) => ({
+        ...order,
+        customer_name: order.customers?.name || ''
+      }))
+      setOrders(ordersWithCustomer)
     } catch (error) {
       console.error('Error fetching orders:', error)
     } finally {
@@ -66,7 +73,8 @@ export default function Orders() {
   }
 
   const filteredOrders = orders.filter(order =>
-    order.customer_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (order.custom_order_id?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
+    (order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
     order.status.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -131,8 +139,8 @@ export default function Orders() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Order ID</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Customer</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Order Code</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Customer Name</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Total Amount</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Order Date</th>
@@ -143,10 +151,10 @@ export default function Orders() {
                 {filteredOrders.map((order) => (
                   <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-4 px-4">
-                      <p className="font-medium text-gray-900">{order.id}</p>
+                      <p className="font-medium text-gray-900">{order.custom_order_id || '-'}</p>
                     </td>
                     <td className="py-4 px-4">
-                      <p className="font-medium text-gray-900">{order.customer_id}</p>
+                      <p className="font-medium text-gray-900">{order.customer_name || '-'}</p>
                     </td>
                     <td className="py-4 px-4">
                       <p className="font-medium text-gray-900">{order.total_amount}</p>
