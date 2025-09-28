@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import KpiCard from './KpiCard';
-import DateRangePicker from './DateRangePicker';
+import ReportFilter, { ReportFilterState } from './ReportFilter';
 import { downloadCsv } from '../../lib/csv';
 import { Users, ShoppingCart, FileText, DollarSign } from 'lucide-react';
+import { Pie, Bar } from 'react-chartjs-2';
+import 'chart.js/auto';
 
 interface ReportData {
   customers: any[];
@@ -17,24 +19,39 @@ export default function Reports() {
   const { user } = useAuth();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
+  // Filter state: startDate, endDate, extensible for more
+  const [filters, setFilters] = useState<ReportFilterState>({
+    startDate: new Date('2000-01-01T00:00:00Z'),
+    endDate: new Date(),
+  });
+
 
   useEffect(() => {
-    if (user) {
+    if (
+      user &&
+      filters.startDate &&
+      filters.endDate &&
+      filters.startDate <= filters.endDate
+    ) {
       fetchData();
     }
-  }, [user, startDate, endDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, filters]);
 
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
+    // Ensure full day range
+    const start = new Date(filters.startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(filters.endDate);
+    end.setHours(23, 59, 59, 999);
     try {
       const [customers, orders, invoices, transactions] = await Promise.all([
-        supabase.from('customers').select('*').eq('user_id', user.id).gte('created_at', startDate.toISOString()).lte('created_at', endDate.toISOString()),
-        supabase.from('orders').select('*').eq('user_id', user.id).gte('created_at', startDate.toISOString()).lte('created_at', endDate.toISOString()),
-        supabase.from('invoices').select('*').eq('user_id', user.id).gte('created_at', startDate.toISOString()).lte('created_at', endDate.toISOString()),
-        supabase.from('financial_transactions').select('*').eq('user_id', user.id).gte('transaction_date', startDate.toISOString()).lte('transaction_date', endDate.toISOString()),
+        supabase.from('customers').select('*').eq('user_id', user.id).gte('created_at', start.toISOString()).lte('created_at', end.toISOString()),
+        supabase.from('orders').select('*').eq('user_id', user.id).gte('created_at', start.toISOString()).lte('created_at', end.toISOString()),
+        supabase.from('invoices').select('*').eq('user_id', user.id).gte('created_at', start.toISOString()).lte('created_at', end.toISOString()),
+        supabase.from('financial_transactions').select('*').eq('user_id', user.id).gte('transaction_date', start.toISOString()).lte('transaction_date', end.toISOString()),
       ]);
 
       setData({
@@ -50,9 +67,9 @@ export default function Reports() {
     }
   };
 
-  const handleDateRangeChange = (startDate: Date, endDate: Date) => {
-    setStartDate(startDate);
-    setEndDate(endDate);
+  // Handle filter changes from ReportFilter
+  const handleFilterChange = (newFilters: ReportFilterState) => {
+    setFilters(newFilters);
   };
 
   const handleExport = () => {
@@ -71,17 +88,20 @@ export default function Reports() {
         totalOrders: 0,
         totalRevenue: 0,
         totalExpenses: 0,
+        totalProfit: 0,
       };
     }
 
     const totalRevenue = data.transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
     const totalExpenses = data.transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+    const totalProfit = totalRevenue - totalExpenses;
 
     return {
       totalCustomers: data.customers.length,
       totalOrders: data.orders.length,
       totalRevenue,
       totalExpenses,
+      totalProfit,
     };
   };
 
@@ -98,6 +118,43 @@ export default function Reports() {
     );
   }
 
+  // Pie chart data for expense categories
+  const expenseCategories = (data?.transactions || [])
+    .filter(t => t.type === 'expense')
+    .reduce((acc: Record<string, number>, t) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {});
+  const pieData = {
+    labels: Object.keys(expenseCategories),
+    datasets: [{
+      data: Object.values(expenseCategories),
+      backgroundColor: [
+        '#60a5fa', '#f87171', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#facc15', '#38bdf8'
+      ],
+    }],
+  };
+
+  // Column chart data for most sold order items
+  const itemSales: Record<string, number> = {};
+  (data?.orders || []).forEach(order => {
+    if (order.items) {
+      order.items.forEach((item: any) => {
+        itemSales[item.name] = (itemSales[item.name] || 0) + (item.quantity || 1);
+      });
+    }
+  });
+  const barData = {
+    labels: Object.keys(itemSales),
+    datasets: [{
+      label: 'Quantity Sold',
+      data: Object.values(itemSales),
+      backgroundColor: '#60a5fa',
+    }],
+  };
+
+  const formatNaira = (amount: number) => `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -113,18 +170,28 @@ export default function Reports() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
         <KpiCard title="Total Customers" value={kpis.totalCustomers} icon={<Users />} />
         <KpiCard title="Total Orders" value={kpis.totalOrders} icon={<ShoppingCart />} />
-        <KpiCard title="Total Revenue" value={`$${kpis.totalRevenue.toFixed(2)}`} icon={<DollarSign />} />
-        <KpiCard title="Total Expenses" value={`$${kpis.totalExpenses.toFixed(2)}`} icon={<DollarSign />} />
+        <KpiCard title="Total Revenue" value={formatNaira(kpis.totalRevenue)} icon={<DollarSign />} />
+        <KpiCard title="Total Expenses" value={formatNaira(kpis.totalExpenses)} icon={<DollarSign />} />
+        <KpiCard title="Total Profit" value={formatNaira(kpis.totalProfit)} icon={<DollarSign />} />
       </div>
 
       <div className="mb-6">
-        <DateRangePicker onChange={handleDateRangeChange} />
+        <ReportFilter onChange={handleFilterChange} initialFilters={filters} />
       </div>
 
-      {/* You can add tables here to display the data */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg shadow p-4">
+          <h2 className="text-lg font-semibold mb-4">Expense Breakdown</h2>
+          <Pie data={pieData} />
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <h2 className="text-lg font-semibold mb-4">Most Sold Order Items</h2>
+          <Bar data={barData} />
+        </div>
+      </div>
     </div>
   );
 }
