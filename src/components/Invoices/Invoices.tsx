@@ -26,6 +26,7 @@ export default function Invoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [showForm, setShowForm] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
 
@@ -71,10 +72,12 @@ export default function Invoices() {
     }
   }
 
-  const filteredInvoices = invoices.filter(invoice =>
-    invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    invoice.status.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredInvoices = invoices.filter(invoice => {
+    const matchesSearch = invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.status.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' ? true : invoice.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -116,9 +119,9 @@ export default function Invoices() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative">
+      {/* Filters */}
+      <div className="mb-6 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+        <div className="relative w-full md:w-1/2">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
@@ -127,6 +130,21 @@ export default function Invoices() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="statusFilter" className="text-sm font-medium text-gray-700">Status:</label>
+          <select
+            id="statusFilter"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1"
+          >
+            <option value="all">All</option>
+            <option value="draft">Draft</option>
+            <option value="sent">Sent</option>
+            <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
+          </select>
         </div>
       </div>
 
