@@ -9,7 +9,8 @@ import {
   LogOut,
   Menu,
   X,
-  Home
+  Home,
+  Boxes
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -28,6 +29,8 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'invoices', label: 'Invoices', icon: FileText },
     { id: 'finances', label: 'Finances', icon: DollarSign },
+    { id: 'inventory', label: 'Inventory', icon: Boxes },
+    { id: 'inventory-update', label: 'Update Inventory', icon: Boxes },
     { id: 'reports', label: 'Reports', icon: BarChart3 },
   ]
 

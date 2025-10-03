@@ -7,6 +7,8 @@ import Orders from './components/Orders/Orders';
 import Invoices from './components/Invoices/Invoices';
 import Finances from './components/Finances/Finances';
 import Reports from './components/Reports/Reports';
+import Inventory from './components/Inventory/Inventory';
+import InventoryUpdate from './components/Inventory/InventoryUpdate';
 import LandingPage from './components/LandingPage/LandingPage';
 import { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -35,6 +37,10 @@ function App() {
         return <Invoices />;
       case 'finances':
         return <Finances />;
+      case 'inventory':
+        return <Inventory />;
+      case 'inventory-update':
+        return <InventoryUpdate />;
       case 'reports':
         return <Reports />;
       default:
