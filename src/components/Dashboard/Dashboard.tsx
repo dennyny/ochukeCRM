@@ -8,8 +8,10 @@ import {
   Calendar,
   MoreVertical
 } from 'lucide-react'
+
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { DashboardDateFilter } from './DashboardDateFilter'
 
 interface DashboardStats {
   totalRevenue: number
@@ -33,7 +35,7 @@ interface RecentActivity {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalExpenses: 0,
@@ -44,17 +46,19 @@ export default function Dashboard() {
     prevExpenses: undefined,
     prevCustomers: undefined,
     prevOrders: undefined,
-  })
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
-  const [loading, setLoading] = useState(true)
+  });
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dateFilter, setDateFilter] = useState<'this-month' | 'all-time'>('this-month');
 
   useEffect(() => {
     if (user) {
-      fetchDashboardData()
+      fetchDashboardData(dateFilter);
     }
-  }, [user])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, dateFilter]);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (filter: 'this-month' | 'all-time') => {
     try {
       // Date ranges for this month and last month
       const now = new Date();
@@ -63,29 +67,54 @@ export default function Dashboard() {
       const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
       const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-      // Fetch current month
+      // Build filters
+      const filterThisMonth = (query: any) =>
+        query.gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString());
+      const filterLastMonth = (query: any) =>
+        query.gte('created_at', startOfLastMonth.toISOString()).lte('created_at', endOfLastMonth.toISOString());
+
+      // Fetch current period
+      let customersQuery = supabase.from('customers').select('*', { count: 'exact', head: true }).eq('user_id', user!.id);
+      let ordersQuery = supabase.from('orders').select('total_amount', { count: 'exact' }).eq('user_id', user!.id);
+      let invoicesQuery = supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('user_id', user!.id);
+      let transactionsQuery = supabase.from('financial_transactions').select('type, amount, created_at').eq('user_id', user!.id);
+
+      if (filter === 'this-month') {
+        customersQuery = filterThisMonth(customersQuery);
+        ordersQuery = filterThisMonth(ordersQuery);
+        invoicesQuery = filterThisMonth(invoicesQuery);
+        transactionsQuery = filterThisMonth(transactionsQuery);
+      }
+      // For 'all-time', don't filter by date
+
       const [{ count: customersCount }, { data: orders, count: ordersCount }, { count: invoicesCount }, { data: transactions }] = await Promise.all([
-        supabase.from('customers').select('*', { count: 'exact', head: true }).eq('user_id', user!.id).gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString()),
-        supabase.from('orders').select('total_amount', { count: 'exact' }).eq('user_id', user!.id).gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString()),
-        supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('user_id', user!.id).gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString()),
-        supabase.from('financial_transactions').select('type, amount, created_at').eq('user_id', user!.id).gte('created_at', startOfThisMonth.toISOString()).lte('created_at', endOfThisMonth.toISOString()),
+        customersQuery,
+        ordersQuery,
+        invoicesQuery,
+        transactionsQuery,
       ]);
 
-      // Fetch previous month
-      const [{ count: prevCustomers }, { count: prevOrders }, { data: prevTransactions }] = await Promise.all([
-        supabase.from('customers').select('*', { count: 'exact', head: true }).eq('user_id', user!.id).gte('created_at', startOfLastMonth.toISOString()).lte('created_at', endOfLastMonth.toISOString()),
-        supabase.from('orders').select('id', { count: 'exact' }).eq('user_id', user!.id).gte('created_at', startOfLastMonth.toISOString()).lte('created_at', endOfLastMonth.toISOString()),
-        supabase.from('financial_transactions').select('type, amount, created_at').eq('user_id', user!.id).gte('created_at', startOfLastMonth.toISOString()).lte('created_at', endOfLastMonth.toISOString()),
-      ]);
+      // Fetch previous month (for growth calculation)
+      let prevCustomers: number | undefined = undefined, prevOrders: number | undefined = undefined, prevTransactions: { type: string; amount: number }[] | undefined = undefined;
+      if (filter === 'this-month') {
+        const [{ count: prevCustomersCount }, { count: prevOrdersCount }, { data: prevTrans }] = await Promise.all([
+          filterLastMonth(supabase.from('customers').select('*', { count: 'exact', head: true }).eq('user_id', user!.id)),
+          filterLastMonth(supabase.from('orders').select('id', { count: 'exact' }).eq('user_id', user!.id)),
+          filterLastMonth(supabase.from('financial_transactions').select('type, amount, created_at').eq('user_id', user!.id)),
+        ]);
+        prevCustomers = prevCustomersCount;
+        prevOrders = prevOrdersCount;
+        prevTransactions = prevTrans;
+      }
 
       // Calculate stats
-      const totalRevenue = transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
-      const totalExpenses = transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
-      const prevRevenue = prevTransactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || undefined;
-      const prevExpenses = prevTransactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || undefined;
+      const totalRevenue = transactions?.filter((t: { type: string; amount: number }) => t.type === 'income').reduce((sum: number, t: { amount: number }) => sum + t.amount, 0) || 0;
+      const totalExpenses = transactions?.filter((t: { type: string; amount: number }) => t.type === 'expense').reduce((sum: number, t: { amount: number }) => sum + t.amount, 0) || 0;
+      const prevRevenue = prevTransactions?.filter((t: { type: string; amount: number }) => t.type === 'income').reduce((sum: number, t: { amount: number }) => sum + t.amount, 0) || undefined;
+      const prevExpenses = prevTransactions?.filter((t: { type: string; amount: number }) => t.type === 'expense').reduce((sum: number, t: { amount: number }) => sum + t.amount, 0) || undefined;
 
-      // Get recent activity (still from all time)
-      const { data: recentOrders } = await supabase
+      // Get recent activity (from current filter period)
+      let recentOrdersQuery = supabase
         .from('orders')
         .select(`
           id, total_amount, created_at, status,
@@ -94,6 +123,12 @@ export default function Dashboard() {
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(5);
+      if (filter === 'this-month') {
+        recentOrdersQuery = filterThisMonth(recentOrdersQuery);
+      }
+      // For 'all-time', don't filter by date
+
+      const { data: recentOrders } = await recentOrdersQuery;
 
       const activity: RecentActivity[] = recentOrders?.map(order => ({
         id: order.id,
@@ -130,17 +165,17 @@ export default function Dashboard() {
       currency: 'NGN',
       currencyDisplay: 'symbol',
       minimumFractionDigits: 2
-    }).format(amount)
-  }
+    }).format(amount);
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+      minute: '2-digit',
+    });
+  };
 
   if (loading) {
     return (
@@ -153,7 +188,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   const statCards = [
@@ -200,10 +235,7 @@ export default function Dashboard() {
           <p className="text-gray-600">Welcome back! Here's what's happening.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <Calendar size={20} />
-            <span>This Month</span>
-          </button>
+          <DashboardDateFilter selected={dateFilter} onFilterChange={setDateFilter} />
         </div>
       </div>
 
@@ -341,5 +373,5 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }
