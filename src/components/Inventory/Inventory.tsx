@@ -95,7 +95,8 @@ export default function Inventory() {
               <th className="px-4 py-2 border-b">Name</th>
               <th className="px-4 py-2 border-b">Description</th>
               <th className="px-4 py-2 border-b">Quantity</th>
-              <th className="px-4 py-2 border-b">Price</th>
+              <th className="px-4 py-2 border-b">Unit Price</th>
+              <th className="px-4 py-2 border-b">Total Price</th>
               <th className="px-4 py-2 border-b">Actions</th>
             </tr>
           </thead>
@@ -115,6 +116,7 @@ export default function Inventory() {
                   <td className="px-4 py-2 border-b">{item.description || '-'}</td>
                   <td className={`px-4 py-2 border-b font-semibold ${item.quantity <= LOW_STOCK_THRESHOLD ? 'text-red-600' : ''}`}>{item.quantity}</td>
                   <td className="px-4 py-2 border-b">₦{item.price.toLocaleString()}</td>
+                  <td className="px-4 py-2 border-b">₦{(item.price * item.quantity).toLocaleString()}</td>
                   <td className="px-4 py-2 border-b">
                     <button
                       className="text-blue-600 hover:underline mr-2"

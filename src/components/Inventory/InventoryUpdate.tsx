@@ -47,7 +47,8 @@ export default function InventoryUpdate() {
           <thead>
             <tr>
               <th className="px-4 py-2 border-b">Name</th>
-              <th className="px-4 py-2 border-b">Quantity</th>
+              <th className="px-4 py-2 border-b">Current Qty</th>
+              <th className="px-4 py-2 border-b">Change Amount</th>
               <th className="px-4 py-2 border-b">Price</th>
               <th className="px-4 py-2 border-b">Actions</th>
             </tr>
@@ -65,14 +66,15 @@ export default function InventoryUpdate() {
               items.map((item) => (
                 <tr key={item.id}>
                   <td className="px-4 py-2 border-b font-medium">{item.name}</td>
+                  <td className="px-4 py-2 border-b text-center">{item.quantity}</td>
                   <td className="px-4 py-2 border-b">
                     <input
                       type="number"
                       className="border rounded px-2 py-1 w-24"
-                      value={typeof editValues[item.id]?.quantity === 'number' ? editValues[item.id].quantity : item.quantity}
-                      min={0}
-                      onChange={e => handleEditValueChange(item.id, 'quantity', Number(e.target.value))}
+                      value={editValues[item.id]?.change ?? ''}
+                      onChange={e => handleEditValueChange(item.id, 'change', Number(e.target.value))}
                       disabled={savingId === item.id}
+                      placeholder="0"
                     />
                   </td>
                   <td className="px-4 py-2 border-b">
@@ -87,15 +89,24 @@ export default function InventoryUpdate() {
                   </td>
                   <td className="px-4 py-2 border-b">
                     <button
-                      className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50"
-                      disabled={savingId === item.id}
-                      onClick={() => handleUpdate(
-                        item.id,
-                        typeof editValues[item.id]?.quantity === 'number' ? editValues[item.id].quantity : item.quantity,
-                        typeof editValues[item.id]?.price === 'number' ? editValues[item.id].price : item.price
-                      )}
+                      className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50 mr-2"
+                      disabled={
+                        savingId === item.id ||
+                        editValues[item.id]?.change === undefined ||
+                        editValues[item.id]?.change === '' ||
+                        Number(editValues[item.id]?.change) === 0
+                      }
+                      onClick={() => {
+                        const change = Number(editValues[item.id]?.change) || 0;
+                        handleUpdate(
+                          item.id,
+                          item.quantity + change,
+                          typeof editValues[item.id]?.price === 'number' ? editValues[item.id].price : item.price
+                        );
+                        setEditValues((prev) => ({ ...prev, [item.id]: { ...prev[item.id], change: '' } }));
+                      }}
                     >
-                      {savingId === item.id ? 'Saving...' : 'Update'}
+                      {savingId === item.id ? 'Saving...' : 'Apply'}
                     </button>
                   </td>
                 </tr>
